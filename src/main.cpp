@@ -37,6 +37,7 @@
 #include "ServerManager.h"
 #include "Globals.h"
 #include "UpdateManager.h"
+#include "WebsocketManager.h"
 
 TaskHandle_t taskHandle;
 volatile bool StopTask = false;
@@ -51,7 +52,7 @@ void BootAnimation(void *parameter)
     {
       break;
     }
-    DisplayManager.HSVtext(4, 6, "AWTRIX", true, 0);
+    DisplayManager.HSVtext(4, 6, "PV Dieburg GmbH", true, 0);
     vTaskDelay(xDelay);
   }
   vTaskDelete(NULL);
@@ -81,7 +82,7 @@ void setup()
     float x = 4;
     while (x >= -85)
     {
-      DisplayManager.HSVtext(x, 6, ("AWTRIX   " + ServerManager.myIP.toString()).c_str(), true, 0);
+      DisplayManager.HSVtext(x, 6, ("PV Dieburg GmbH   " + ServerManager.myIP.toString()).c_str(), true, 0);
       x -= 0.18;
     }
     if (MQTT_HOST != "")
@@ -98,6 +99,7 @@ void setup()
   }
   delay(200);
   DisplayManager.setBrightness(BRIGHTNESS);
+  WebsocketManager.setup();
 }
 
 void loop()
@@ -109,4 +111,5 @@ void loop()
   {
     MQTTManager.tick();
   }
+  WebsocketManager.tick();
 }

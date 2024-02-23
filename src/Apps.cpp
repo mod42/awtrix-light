@@ -18,6 +18,9 @@ int WEATHER_CODE;
 String WEATHER_TEMP;
 String WEATHER_HUM;
 
+int pv_currentFrame = 0;
+File pvIcon;
+
 std::vector<std::pair<String, AppCallback>> Apps;
 String currentCustomApp;
 std::map<String, CustomApp> customApps;
@@ -257,6 +260,38 @@ void TempApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, 
         DisplayManager.matrixPrint(tempF, TEMP_DECIMAL_PLACES);
         DisplayManager.matrixPrint(utf8ascii("°F"));
     }
+}
+
+void PVPower(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, int16_t y, GifPlayer *gifPlayer)
+{
+    // DEBUG_PRINTLN(F("PV Start"));
+    if (notifyFlag)
+        return;
+    CURRENT_APP = "PVPower";
+    currentCustomApp = "";
+    if (HUM_COLOR > 0)
+    {
+        DisplayManager.setTextColor(HUM_COLOR);
+    }
+    else
+    {
+        DisplayManager.getInstance().resetTextColor();
+    }
+
+    String filePath = "/ICONS/27283.gif";
+    if (LittleFS.exists(filePath))
+    {
+        if (!pvIcon){
+            pvIcon = LittleFS.open(filePath);
+        }
+        gifPlayer->playGif(x, y, &pvIcon, pv_currentFrame);
+        pv_currentFrame = gifPlayer->getFrame();
+    }
+    DisplayManager.setCursor(14 + x, 6 + y);
+    int humidity = CURRENT_HUM;
+    DisplayManager.matrixPrint(humidity, 0);
+    DisplayManager.matrixPrint("%");
+    
 }
 
 void HumApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, int16_t y, GifPlayer *gifPlayer)

@@ -479,6 +479,8 @@ void PeripheryManager_::tick()
 #endif
             CURRENT_TEMP += TEMP_OFFSET;
             CURRENT_HUM += HUM_OFFSET;
+
+            // checkWSUpdate();
         }
         else
         {

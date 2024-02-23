@@ -1063,10 +1063,13 @@ void DisplayManager_::loadNativeApps()
   {
     updateApp("Temperature", TempApp, SHOW_TEMP, 2);
     updateApp("Humidity", HumApp, SHOW_HUM, 3);
+
   }
-#ifdef ULANZI
-  updateApp("Battery", BatApp, SHOW_BAT, 4);
-#endif
+// #ifdef ULANZI
+//   updateApp("Battery", BatApp, SHOW_BAT, 4);
+// #endif
+
+  updateApp("PVPower", PVPower, SHOW_PV, 4);
 
   ui->setApps(Apps);
   setAutoTransition(true);
@@ -1219,32 +1222,13 @@ void DisplayManager_::tick()
     }
   }
 
-  if (NEWYEAR)
-    DisplayManager.checkNewYear();
 }
 
 bool newYearEventTriggered = false;
 
 void DisplayManager_::checkNewYear()
 {
-  time_t now = time(nullptr);
-  struct tm *timeInfo;
-  timeInfo = localtime(&now);
-  if (timeInfo->tm_mon == 0 && timeInfo->tm_mday == 1 && timeInfo->tm_hour == 0 && timeInfo->tm_min == 0 && timeInfo->tm_sec == 0)
-  {
-    if (!newYearEventTriggered)
-    {
-      int year = 1900 + timeInfo->tm_year;
-      char message[300];
-      sprintf(message, "{'stack':false,'text':'%d','duration':20,'effect':'Fireworks','rtttl':'Auld:d=4,o=6,b=125:a5,d.,8d,d,f#,e.,8d,e,8f#,8e,d.,8d,f#,a,2b.,b,a.,8f#,f#,d,e.,8d,e,8f#,8e,d.,8b5,b5,a5,2d,16p'}", year);
-      DisplayManager.generateNotification(0, message);
-      newYearEventTriggered = true;
-    }
-  }
-  else
-  {
     newYearEventTriggered = false;
-  }
 }
 
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *data)
@@ -1496,6 +1480,11 @@ std::pair<String, AppCallback> getNativeAppByName(const String &appName)
   {
     return std::make_pair("Humidity", HumApp);
   }
+  else if (appName == "PVPower")
+  {
+    return std::make_pair("PVPower", PVPower);
+  }
+
 #ifdef ULANZI
   else if (appName == "Battery")
   {
@@ -1985,6 +1974,7 @@ String DisplayManager_::getSettings()
   doc["HUM"] = SHOW_HUM;
   doc["TEMP"] = SHOW_TEMP;
   doc["BAT"] = SHOW_BAT;
+  doc["PV"] = SHOW_PV;
 
   String jsonString;
   return serializeJson(doc, jsonString), jsonString;
@@ -2034,6 +2024,7 @@ void DisplayManager_::setNewSettings(const char *json)
   SHOW_TIME = doc.containsKey("TIM") ? doc["TIM"].as<bool>() : SHOW_TIME;
   SHOW_DATE = doc.containsKey("DAT") ? doc["DAT"].as<bool>() : SHOW_DATE;
   SHOW_HUM = doc.containsKey("HUM") ? doc["HUM"].as<bool>() : SHOW_HUM;
+  SHOW_PV = doc.containsKey("PV") ? doc["PV"].as<bool>() : SHOW_PV;
   SHOW_TEMP = doc.containsKey("TEMP") ? doc["TEMP"].as<bool>() : SHOW_TEMP;
   SHOW_BAT = doc.containsKey("BAT") ? doc["BAT"].as<bool>() : SHOW_BAT;
 

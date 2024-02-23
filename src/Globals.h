@@ -48,6 +48,7 @@ extern bool SHOW_BAT;
 extern String HA_PREFIX;
 extern bool SHOW_TEMP;
 extern bool SHOW_HUM;
+extern bool SHOW_PV;
 extern bool SHOW_SECONDS;
 extern bool SHOW_WEEKDAY;
 extern int8_t TRANS_EFFECT;

@@ -258,6 +258,8 @@ void loadSettings()
     SHOW_DATE = Settings.getBool("DAT", false);
     SHOW_TEMP = Settings.getBool("TEMP", true);
     SHOW_HUM = Settings.getBool("HUM", true);
+    SHOW_PV = Settings.getBool("PV", true);
+
     MATRIX_LAYOUT = Settings.getUInt("MAT", 0);
     SCROLL_SPEED = Settings.getUInt("SSPEED", 100);
 #ifdef ULANZI
@@ -309,6 +311,7 @@ void saveSettings()
     Settings.putBool("DAT", SHOW_DATE);
     Settings.putBool("TEMP", SHOW_TEMP);
     Settings.putBool("HUM", SHOW_HUM);
+    Settings.putBool("PV", SHOW_PV);
     Settings.putUInt("SSPEED", SCROLL_SPEED);
 #ifdef ULANZI
     Settings.putBool("BAT", SHOW_BAT);
@@ -342,6 +345,7 @@ bool SHOW_WEATHER = true;
 bool SHOW_BAT = true;
 bool SHOW_TEMP = true;
 bool SHOW_HUM = true;
+bool SHOW_PV = true;
 bool SHOW_SECONDS = true;
 bool SHOW_WEEKDAY = true;
 String NET_IP = "192.168.178.10";

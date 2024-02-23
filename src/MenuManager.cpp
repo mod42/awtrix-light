@@ -205,10 +205,13 @@ String MenuManager_::menutext()
             DisplayManager.drawBMP(0, 0, icon_2075, 8, 8);
             return SHOW_HUM ? "ON" : "OFF";
 #ifndef awtrix2_upgrade
-        case 4:
+        case 5:
             DisplayManager.drawBMP(0, 0, icon_1486, 8, 8);
             return SHOW_BAT ? "ON" : "OFF";
 #endif
+        case 4:
+            DisplayManager.drawBMP(0, 0, icon_27283, 8, 8);
+            return SHOW_PV ? "ON" : "OFF";        
         default:
             break;
         }
@@ -434,11 +437,15 @@ void MenuManager_::selectButton()
         case 3:
             SHOW_HUM = !SHOW_HUM;
             break;
+        
 #ifndef awtrix2_upgrade
         case 4:
             SHOW_BAT = !SHOW_BAT;
             break;
 #endif
+        case 5:
+            SHOW_PV = !SHOW_PV;
+            break;
         default:
             break;
         }
