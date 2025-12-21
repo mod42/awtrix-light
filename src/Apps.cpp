@@ -7,6 +7,7 @@
 #include "MenuManager.h"
 #include "PeripheryManager.h"
 #include <WiFi.h>
+#include <LittleFS.h>
 #include "effects.h"
 #include "MQTTManager.h"
 #include "Overlays.h"
@@ -21,6 +22,10 @@ String WEATHER_HUM;
 std::vector<std::pair<String, AppCallback>> Apps;
 String currentCustomApp;
 std::map<String, CustomApp> customApps;
+static File pvGifFile;
+static bool pvGifChecked = false;
+static bool pvGifAvailable = false;
+static uint8_t pvGifFrame = 0;
 
 CustomApp *getCustomAppByName(String name)
 {
@@ -292,10 +297,58 @@ void BatApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, i
     {
         DisplayManager.getInstance().resetTextColor();
     }
-    matrix->drawRGBBitmap(x, y, icon_1486, 8, 8);
-    DisplayManager.setCursor(14 + x, 6 + y);
-    DisplayManager.matrixPrint(BATTERY_PERCENT, 0); // Ausgabe des Ladezustands
-    DisplayManager.matrixPrint("%");
+//    matrix->drawRGBBitmap(x, y, icon_1486, 8, 8);
+    bool drewGif = false;
+    if (!pvGifChecked)
+    {
+        pvGifChecked = true;
+        if (LittleFS.exists("/ICONS/67806.gif"))
+        {
+            pvGifFile = LittleFS.open("/ICONS/67806.gif", "r");
+            pvGifAvailable = pvGifFile;
+            pvGifFrame = 0;
+            if (pvGifAvailable && pvGifFile.size() > 1024)
+            {
+                pvGifFile.close();
+                pvGifAvailable = false;
+            }
+        }
+    }
+
+    if (pvGifAvailable && gifPlayer)
+    {
+        // Clear icon area before drawing animated icon
+        DisplayManager.drawFilledRect(x, y, 8, 8, 0);
+        if (pvGifFile.size() == 0)
+        {
+            pvGifAvailable = false;
+        }
+        else
+        {
+            if (pvGifFile.position() >= pvGifFile.size())
+            {
+                pvGifFile.seek(0);
+                pvGifFrame = 0;
+            }
+            gifPlayer->playGif(x, y, &pvGifFile, pvGifFrame);
+            pvGifFrame = gifPlayer->getFrame();
+            drewGif = true;
+        }
+    }
+
+    if (!drewGif)
+    {
+        matrix->drawRGBBitmap(x, y, icon_27283, 8, 8);
+    }
+
+    if (PV_Power_total < 1000)
+        DisplayManager.setCursor(13 + x, 6 + y);
+    else
+        DisplayManager.setCursor(11 + x, 6 + y);
+    // DisplayManager.matrixPrint(BATTERY_PERCENT, 0); // Ausgabe des Ladezustands
+    DisplayManager.matrixPrint(PV_Power_total, 0); // Ausgabe des Ladezustands
+    DisplayManager.matrixPrint("W");
+    Serial.print('*');
 }
 #endif
 

@@ -17,6 +17,10 @@
 #include <ServerManager.h>
 #include <MedianFilterLib.h>
 #include <MeanFilterLib.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+
 const int buzzerPin = 2;       // Buzzer an GPIO2
 const int baudRate = 50;       // Nachrichtenübertragungsrate
 const char *message = "HELLO"; // Die Nachricht, die gesendet werden soll
@@ -109,6 +113,12 @@ MeanFilter<uint16_t> meanFilterBatt(MEAN_WND);
 MeanFilter<uint16_t> meanFilterLDR(MEAN_WND);
 
 float brightnessPercent = 0.0;
+static void fetchPvPowerFromApi();
+static bool refreshPvToken();
+static bool tokenInvalid(int httpCode, const String &response);
+static uint32_t lastPvPoll = 0;
+static const uint32_t pvPollIntervalMs = 60000; // poll every 60 seconds
+static const char *pvRefreshUrl = "https://gateway.isolarcloud.eu/openapi/auth/refreshToken";
 
 PeripheryManager_::PeripheryManager_()
 {
@@ -492,6 +502,8 @@ void PeripheryManager_::tick()
             BATTERY_PERCENT = max(min((int)map(BATTERY_RAW, MIN_BATTERY, MAX_BATTERY, 0, 100), 100), 0);
             SENSORS_STABLE = true;
         }
+        fetchPvPowerFromApi();
+
 #else
         SENSORS_STABLE = true;
 #endif
@@ -547,6 +559,215 @@ void PeripheryManager_::tick()
             DisplayManager.setBrightness(BRIGHTNESS);
         }
     }
+}
+
+static void fetchPvPowerFromApi()
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        if (DEBUG_MODE)
+            DEBUG_PRINTLN(F("PV API: skip, WiFi not connected"));
+        return;
+    }
+
+    if (PV_ACCESS_TOKEN.isEmpty() || PV_ACCESS_KEY.isEmpty() || PV_DEVICE_APPKEY.isEmpty() || PV_DEVICE_SN.isEmpty())
+    {
+        if (DEBUG_MODE)
+            DEBUG_PRINTLN(F("PV API: skip, missing credentials"));
+        return;
+    }
+
+    uint32_t now = millis();
+    if (lastPvPoll != 0 && (uint32_t)(now - lastPvPoll) < pvPollIntervalMs)
+        return;
+
+    lastPvPoll = now;
+
+    WiFiClientSecure client;
+    client.setInsecure(); // TODO: pin the gateway certificate for production use
+
+    HTTPClient http;
+    const char *url = "https://gateway.isolarcloud.eu/openapi/platform/getDeviceRealTimeData";
+    if (!http.begin(client, url))
+    {
+        if (DEBUG_MODE)
+            DEBUG_PRINTLN(F("PV API: begin failed"));
+        return;
+    }
+
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", ("Bearer " + PV_ACCESS_TOKEN).c_str());
+    http.addHeader("User-Agent", "awtrix3/1.0");
+    http.addHeader("lang", "_en_US");
+    http.addHeader("x-access-key", PV_ACCESS_KEY.c_str());
+
+    StaticJsonDocument<512> payload;
+    payload["appkey"] = PV_DEVICE_APPKEY;
+    payload["device_type"] = "14";
+    payload["is_get_point_dict"] = "0";
+    JsonArray pointIds = payload.createNestedArray("point_id_list");
+    pointIds.add("13112");
+    pointIds.add("13141");
+    pointIds.add("13003");
+    JsonArray snList = payload.createNestedArray("sn_list");
+    snList.add(PV_DEVICE_SN);
+
+    String body;
+    serializeJson(payload, body);
+
+    int httpCode = http.POST(body);
+    String responseBody = http.getString();
+    if (DEBUG_MODE)
+    {
+        DEBUG_PRINTF("PV API: HTTP %d, payload bytes %u, resp bytes %u", httpCode, (unsigned int)body.length(), (unsigned int)responseBody.length());
+        DEBUG_PRINTF("PV API: response body: %s", responseBody.c_str());
+    }
+    if (httpCode == HTTP_CODE_OK)
+    {
+        DynamicJsonDocument resp(4096);
+        DeserializationError err = deserializeJson(resp, responseBody);
+        if (err)
+        {
+            if (DEBUG_MODE)
+                DEBUG_PRINTF("PV API: parse failed (%s)", err.c_str());
+        }
+        else
+        {
+            uint16_t total = 0;
+            JsonArray devicePoints = resp["result_data"]["device_point_list"];
+            if (!devicePoints.isNull() && devicePoints.size() > 0)
+            {
+                for (JsonObject item : devicePoints)
+                {
+                    JsonObject dp = item["device_point"];
+                    if (dp.isNull())
+                        continue;
+                    float power = dp["p13003"].as<float>();
+                    total += static_cast<uint16_t>(power);
+                    if (DEBUG_MODE)
+                        DEBUG_PRINTF("PV API: device_point p13003=%.2f", power);
+                }
+            }
+            else if (DEBUG_MODE)
+            {
+                DEBUG_PRINTLN(F("PV API: no point list in response"));
+            }
+
+            PV_Power_total = total;
+            if (DEBUG_MODE)
+                DEBUG_PRINTF("PV API: total %u W", PV_Power_total);
+        }
+    }
+    else if (DEBUG_MODE)
+    {
+        DEBUG_PRINTF("PV API: HTTP %d", httpCode);
+    }
+
+    http.end();
+
+    // Handle token expiry and retry once with refreshed token
+    if (tokenInvalid(httpCode, responseBody))
+    {
+        if (refreshPvToken())
+        {
+            lastPvPoll = 0; // allow immediate retry
+            fetchPvPowerFromApi();
+        }
+    }
+}
+
+static bool tokenInvalid(int httpCode, const String &response)
+{
+    if (httpCode == HTTP_CODE_UNAUTHORIZED)
+        return true;
+
+    if (response.indexOf("Invalid access token") >= 0)
+        return true;
+
+    return false;
+}
+
+static bool refreshPvToken()
+{
+    if (WiFi.status() != WL_CONNECTED)
+        return false;
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    HTTPClient http;
+    if (!http.begin(client, pvRefreshUrl))
+    {
+        if (DEBUG_MODE)
+            DEBUG_PRINTLN(F("PV token refresh: begin failed"));
+        return false;
+    }
+
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("User-Agent", "awtrix3/1.0");
+
+    StaticJsonDocument<256> payload;
+    payload["appkey"] = PV_PLATFORM_APPKEY;
+    if (!PV_REFRESH_TOKEN.isEmpty())
+        payload["refresh_token"] = PV_REFRESH_TOKEN;
+
+    String body;
+    serializeJson(payload, body);
+
+    int httpCode = http.POST(body);
+    String resp = http.getString();
+    http.end();
+
+    if (httpCode != HTTP_CODE_OK)
+    {
+        if (DEBUG_MODE)
+            DEBUG_PRINTF("PV token refresh failed: HTTP %d", httpCode);
+        return false;
+    }
+
+    DynamicJsonDocument doc(1024);
+    DeserializationError err = deserializeJson(doc, resp);
+    if (err)
+    {
+        if (DEBUG_MODE)
+            DEBUG_PRINTF("PV token refresh parse error: %s", err.c_str());
+        return false;
+    }
+
+    bool updated = false;
+    if (doc["data"]["access_token"].is<String>())
+    {
+        PV_ACCESS_TOKEN = doc["data"]["access_token"].as<String>();
+        updated = true;
+    }
+    else if (doc["access_token"].is<String>())
+    {
+        PV_ACCESS_TOKEN = doc["access_token"].as<String>();
+        updated = true;
+    }
+
+    if (doc["data"]["refresh_token"].is<String>())
+    {
+        PV_REFRESH_TOKEN = doc["data"]["refresh_token"].as<String>();
+    }
+    else if (doc["refresh_token"].is<String>())
+    {
+        PV_REFRESH_TOKEN = doc["refresh_token"].as<String>();
+    }
+
+    if (doc["data"]["access_key"].is<String>())
+    {
+        PV_ACCESS_KEY = doc["data"]["access_key"].as<String>();
+    }
+    else if (doc["access_key"].is<String>())
+    {
+        PV_ACCESS_KEY = doc["access_key"].as<String>();
+    }
+
+    if (DEBUG_MODE)
+        DEBUG_PRINTF("PV token refresh %s", updated ? "succeeded" : "no new token");
+
+    return updated;
 }
 
 unsigned long long PeripheryManager_::readUptime()

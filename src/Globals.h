@@ -16,6 +16,9 @@
     Serial.print("]: ");    \
     Serial.println(x);      \
   }
+#define DEBUG_PRINT(format,...){                                                                                  \
+    Serial.printf(format, ##__VA_ARGS__);                                                \
+  }
 #define DEBUG_PRINTF(format, ...)                                                        \
   {                                                                                      \
     String formattedMessage = "[" + String(millis()) + "] [" + String(__func__) + "]: "; \
@@ -52,6 +55,14 @@ extern bool SHOW_TEMP;
 extern bool SHOW_HUM;
 extern bool SHOW_SECONDS;
 extern bool SHOW_WEEKDAY;
+extern String EXTERNAL_API_URL;
+extern uint32_t EXTERNAL_API_INTERVAL_MIN;
+extern String PV_ACCESS_TOKEN;
+extern String PV_REFRESH_TOKEN;
+extern String PV_ACCESS_KEY;
+extern String PV_DEVICE_APPKEY;
+extern String PV_PLATFORM_APPKEY;
+extern String PV_DEVICE_SN;
 extern int8_t TRANS_EFFECT;
 extern String NET_IP;
 extern String NET_GW;
@@ -73,6 +84,7 @@ extern uint16_t LDR_RAW;
 extern String CURRENT_APP;
 extern int BACKGROUND_EFFECT;
 extern uint8_t BATTERY_PERCENT;
+extern uint16_t PV_Power_total;
 extern uint16_t BATTERY_RAW;
 extern float TEMP_OFFSET;
 extern float HUM_OFFSET;
