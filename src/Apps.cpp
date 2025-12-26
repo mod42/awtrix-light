@@ -297,7 +297,20 @@ void BatApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, i
     {
         DisplayManager.getInstance().resetTextColor();
     }
-//    matrix->drawRGBBitmap(x, y, icon_1486, 8, 8);
+    matrix->drawRGBBitmap(x, y, icon_1486, 8, 8);
+    DisplayManager.setCursor(12 + x, 6 + y);
+    DisplayManager.matrixPrint(BATTERY_PERCENT, 0);
+    DisplayManager.matrixPrint("%");
+}
+
+void PvPowerApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, int16_t y, GifPlayer *gifPlayer)
+{
+    if (notifyFlag)
+        return;
+    CURRENT_APP = "PV_Power";
+    currentCustomApp = "";
+    DisplayManager.getInstance().resetTextColor();
+
     bool drewGif = false;
     if (!pvGifChecked)
     {
@@ -305,12 +318,11 @@ void BatApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, i
         if (LittleFS.exists("/ICONS/67806.gif"))
         {
             pvGifFile = LittleFS.open("/ICONS/67806.gif", "r");
-            pvGifAvailable = pvGifFile;
+            pvGifAvailable = pvGifFile && pvGifFile.size() <= 4096;
             pvGifFrame = 0;
-            if (pvGifAvailable && pvGifFile.size() > 1024)
+            if (!pvGifAvailable && pvGifFile)
             {
                 pvGifFile.close();
-                pvGifAvailable = false;
             }
         }
     }
@@ -341,16 +353,123 @@ void BatApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, i
         matrix->drawRGBBitmap(x, y, icon_27283, 8, 8);
     }
 
-    if (PV_Power_total < 1000)
-        DisplayManager.setCursor(13 + x, 6 + y);
-    else
-        DisplayManager.setCursor(11 + x, 6 + y);
-    // DisplayManager.matrixPrint(BATTERY_PERCENT, 0); // Ausgabe des Ladezustands
-    DisplayManager.matrixPrint(PV_Power_total, 0); // Ausgabe des Ladezustands
-    DisplayManager.matrixPrint("W");
-    Serial.print('*');
+    // Right-align the power text within the 24px space to the right of the icon
+    String powerText = String(PV_Power_total) + "W";
+    uint16_t powerWidth = getTextWidth(powerText.c_str(), 0);
+    const uint16_t iconWidth = 8;
+    const uint16_t availableWidth = 24;
+    int16_t textX = x + iconWidth + (availableWidth - powerWidth);
+    if (textX < x + iconWidth)
+        textX = x + iconWidth;
+    DisplayManager.setCursor(textX, 6 + y);
+    DisplayManager.matrixPrint(powerText.c_str());
 }
 #endif
+
+void PvSocApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, int16_t y, GifPlayer *gifPlayer)
+{
+    if (notifyFlag)
+        return;
+    CURRENT_APP = "PV_SOC";
+    currentCustomApp = "";
+    DisplayManager.getInstance().resetTextColor();
+    matrix->drawRGBBitmap(x, y, icon_1486, 8, 8);
+    // Right-align SOC within 24px after the icon
+    String socText = String((int)PV_Battery_SOC) + "%";
+    uint16_t socWidth = getTextWidth(socText.c_str(), 0);
+    const uint16_t iconWidth = 8;
+    const uint16_t availableWidth = 24;
+    int16_t textX = x + iconWidth + (availableWidth - socWidth);
+    if (textX < x + iconWidth)
+        textX = x + iconWidth;
+    DisplayManager.setCursor(textX, 6 + y);
+    DisplayManager.matrixPrint(socText.c_str());
+}
+
+void PvEnergyApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, int16_t y, GifPlayer *gifPlayer)
+{
+    if (notifyFlag)
+        return;
+    CURRENT_APP = "PV_Energy";
+    currentCustomApp = "";
+    DisplayManager.getInstance().resetTextColor();
+    bool drewIcon = false;
+    File jpgFile = LittleFS.open("/ICONS/49039.jpg", "r");
+    if (jpgFile)
+    {
+        // Clear icon area before drawing
+        DisplayManager.drawFilledRect(x, y, 8, 8, 0);
+        DisplayManager.drawJPG(x, y, jpgFile);
+        drewIcon = true;
+        jpgFile.close();
+    }
+    if (!drewIcon)
+    {
+        matrix->drawRGBBitmap(x, y, icon_234, 8, 8);
+    }
+    static int16_t energyScrollPos = 0;
+    static uint8_t energyScrollTick = 0;
+    // PV_Energy_Daily is in kWh; render with one decimal
+    String energyText = String(PV_Energy_Daily, 1) + " kWh";
+    uint16_t textWidth = getTextWidth(energyText.c_str(), 0);
+    const uint16_t iconWidth = 8;
+    const uint16_t totalWidth = 32;
+    const uint16_t availableWidth = totalWidth - iconWidth; // space after icon when not scrolling
+    bool doScroll = textWidth > availableWidth;
+
+    // Clear the whole row so text can scroll behind the icon
+    DisplayManager.drawFilledRect(x, y, totalWidth, 8, 0);
+
+    if (doScroll)
+    {
+        // Slow scroll: move every 4 ticks
+        if (++energyScrollTick >= 4)
+        {
+            energyScrollTick = 0;
+            energyScrollPos -= 1;
+        }
+        const int16_t gap = 4; // tiny gap between repeating text
+        // Wrap when the leading text fully leaves the screen
+        if (energyScrollPos <= -(int16_t)(textWidth + gap))
+            energyScrollPos = 0;
+
+        // Draw two instances staggered so at least one is always on screen
+        for (int i = 0; i < 2; i++)
+        {
+            int16_t pos = x + energyScrollPos + i * (textWidth + gap);
+            // Only draw if this instance could appear on screen
+            if (pos < x - (int16_t)textWidth || pos > x + (int16_t)totalWidth)
+                continue;
+            DisplayManager.setCursor(pos, 6 + y);
+            DisplayManager.matrixPrint(energyText.c_str());
+        }
+    }
+    else
+    {
+        energyScrollTick = 0;
+        energyScrollPos = 0;
+        // Right-align within available text width
+        int textX = x + iconWidth + (availableWidth - textWidth);
+        if (textX < x + iconWidth)
+            textX = x + iconWidth;
+        DisplayManager.setCursor(textX, 6 + y);
+    }
+
+    // Draw the icon last so text appears to float behind it
+    if (drewIcon)
+    {
+        File jpgFile = LittleFS.open("/ICONS/49039.jpg", "r");
+        if (jpgFile)
+        {
+            DisplayManager.drawJPG(x, y, jpgFile);
+            jpgFile.close();
+        }
+    }
+    else
+    {
+        matrix->drawRGBBitmap(x, y, icon_234, iconWidth, 8);
+    }
+}
 
 void ShowCustomApp(String name, FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x, int16_t y, GifPlayer *gifPlayer)
 {

@@ -116,6 +116,8 @@ float brightnessPercent = 0.0;
 static void fetchPvPowerFromApi();
 static bool refreshPvToken();
 static bool tokenInvalid(int httpCode, const String &response);
+static void reloadPvDemoSettings();
+static void applyPvDemoValues();
 static uint32_t lastPvPoll = 0;
 static const uint32_t pvPollIntervalMs = 60000; // poll every 60 seconds
 static const char *pvRefreshUrl = "https://gateway.isolarcloud.eu/openapi/auth/refreshToken";
@@ -563,6 +565,14 @@ void PeripheryManager_::tick()
 
 static void fetchPvPowerFromApi()
 {
+    reloadPvDemoSettings();
+
+    if (PV_DEMO_MODE)
+    {
+        applyPvDemoValues();
+        return;
+    }
+
     if (WiFi.status() != WL_CONNECTED)
     {
         if (DEBUG_MODE)
@@ -634,6 +644,8 @@ static void fetchPvPowerFromApi()
         else
         {
             uint16_t total = 0;
+            float soc = 0;
+            float energyWh = 0;
             JsonArray devicePoints = resp["result_data"]["device_point_list"];
             if (!devicePoints.isNull() && devicePoints.size() > 0)
             {
@@ -643,9 +655,11 @@ static void fetchPvPowerFromApi()
                     if (dp.isNull())
                         continue;
                     float power = dp["p13003"].as<float>();
+                    soc = dp["p13141"].as<float>();
+                    energyWh = dp["p13112"].as<float>();
                     total += static_cast<uint16_t>(power);
                     if (DEBUG_MODE)
-                        DEBUG_PRINTF("PV API: device_point p13003=%.2f", power);
+                        DEBUG_PRINTF("PV API: device_point p13003=%.2f p13141=%.2f p13112=%.2f", power, soc, energyWh);
                 }
             }
             else if (DEBUG_MODE)
@@ -654,8 +668,11 @@ static void fetchPvPowerFromApi()
             }
 
             PV_Power_total = total;
+            PV_Battery_SOC = soc;
+            // API energy is reported in Wh; convert to kWh for display
+            PV_Energy_Daily = energyWh / 1000.0f;
             if (DEBUG_MODE)
-                DEBUG_PRINTF("PV API: total %u W", PV_Power_total);
+                DEBUG_PRINTF("PV API: total %u W, SOC %.2f, Energy %.3f kWh", PV_Power_total, PV_Battery_SOC, PV_Energy_Daily);
         }
     }
     else if (DEBUG_MODE)
@@ -707,12 +724,20 @@ static bool refreshPvToken()
     http.addHeader("User-Agent", "awtrix3/1.0");
 
     StaticJsonDocument<256> payload;
-    payload["appkey"] = PV_PLATFORM_APPKEY;
+    payload["appkey"] = PV_DEVICE_APPKEY;
     if (!PV_REFRESH_TOKEN.isEmpty())
         payload["refresh_token"] = PV_REFRESH_TOKEN;
+    else if (DEBUG_MODE)
+        DEBUG_PRINTLN(F("PV token refresh: no refresh_token set, sending without token"));
 
     String body;
     serializeJson(payload, body);
+
+    if (DEBUG_MODE)
+    {
+        DEBUG_PRINTF("PV token refresh: POST %s body len %u", pvRefreshUrl, body.length());
+        DEBUG_PRINTF("PV token refresh body: %s", body.c_str());
+    }
 
     int httpCode = http.POST(body);
     String resp = http.getString();
@@ -721,7 +746,7 @@ static bool refreshPvToken()
     if (httpCode != HTTP_CODE_OK)
     {
         if (DEBUG_MODE)
-            DEBUG_PRINTF("PV token refresh failed: HTTP %d", httpCode);
+            DEBUG_PRINTF("PV token refresh failed: HTTP %d, resp len %u", httpCode, resp.length());
         return false;
     }
 
@@ -730,7 +755,7 @@ static bool refreshPvToken()
     if (err)
     {
         if (DEBUG_MODE)
-            DEBUG_PRINTF("PV token refresh parse error: %s", err.c_str());
+            DEBUG_PRINTF("PV token refresh parse error: %s, raw resp (trunc): %s", err.c_str(), resp.substring(0, 200).c_str());
         return false;
     }
 
@@ -765,9 +790,70 @@ static bool refreshPvToken()
     }
 
     if (DEBUG_MODE)
-        DEBUG_PRINTF("PV token refresh %s", updated ? "succeeded" : "no new token");
+        DEBUG_PRINTF("PV token refresh %s; resp len %u", updated ? "succeeded" : "no new token", resp.length());
 
     return updated;
+}
+
+static void reloadPvDemoSettings()
+{
+    static bool prevMode = PV_DEMO_MODE;
+    static float prevPower = PV_DEMO_POWER_W;
+    static float prevSoc = PV_DEMO_SOC;
+    static float prevEnergy = PV_DEMO_ENERGY_KWH;
+    bool changed = false;
+
+    File file = LittleFS.open("/DoNotTouch.json", "r");
+    if (!file)
+        return;
+
+    DynamicJsonDocument doc(4096);
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+    if (error)
+        return;
+
+    if (doc.containsKey("PV Demo Mode"))
+        PV_DEMO_MODE = doc["PV Demo Mode"].as<bool>();
+    if (doc.containsKey("PV Demo Power (W)"))
+        PV_DEMO_POWER_W = doc["PV Demo Power (W)"].as<float>();
+    if (doc.containsKey("PV Demo SOC (%)"))
+        PV_DEMO_SOC = doc["PV Demo SOC (%)"].as<float>();
+    if (doc.containsKey("PV Demo Energy (kWh)"))
+        PV_DEMO_ENERGY_KWH = doc["PV Demo Energy (kWh)"].as<float>();
+
+    if (prevMode != PV_DEMO_MODE || prevPower != PV_DEMO_POWER_W || prevSoc != PV_DEMO_SOC || prevEnergy != PV_DEMO_ENERGY_KWH)
+        changed = true;
+
+    prevMode = PV_DEMO_MODE;
+    prevPower = PV_DEMO_POWER_W;
+    prevSoc = PV_DEMO_SOC;
+    prevEnergy = PV_DEMO_ENERGY_KWH;
+
+    if (changed && DEBUG_MODE && PV_DEMO_MODE)
+    {
+        DEBUG_PRINTF("PV Demo reload: power %.2f W, SOC %.2f, energy %.3f kWh", PV_DEMO_POWER_W, PV_DEMO_SOC, PV_DEMO_ENERGY_KWH);
+    }
+
+    // apply immediately if demo mode is active
+    if (PV_DEMO_MODE && changed)
+        applyPvDemoValues();
+    else if (!PV_DEMO_MODE && changed)
+    {
+        // force next live poll without waiting interval
+        lastPvPoll = 0;
+        if (DEBUG_MODE)
+            DEBUG_PRINTLN(F("PV Demo disabled, forcing live poll"));
+    }
+}
+
+static void applyPvDemoValues()
+{
+    PV_Power_total = (uint16_t)PV_DEMO_POWER_W;
+    PV_Battery_SOC = PV_DEMO_SOC;
+    PV_Energy_Daily = PV_DEMO_ENERGY_KWH;
+    if (DEBUG_MODE)
+        DEBUG_PRINTF("PV API: demo mode values power %u W, SOC %.2f, energy %.3f kWh", PV_Power_total, PV_Battery_SOC, PV_Energy_Daily);
 }
 
 unsigned long long PeripheryManager_::readUptime()

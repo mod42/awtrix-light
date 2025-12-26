@@ -22,7 +22,8 @@ void startLittleFS()
 {
     if (DEBUG_MODE)
         DEBUG_PRINTLN(F("Starting filesystem"));
-    if (LittleFS.begin())
+    // Mount the partition labeled "littlefs" using the default mount point
+    if (LittleFS.begin(false, "/littlefs", 10, "littlefs"))
     {
         if (LittleFS.exists("/config.json"))
         {
@@ -277,6 +278,9 @@ void loadSettings()
     SCROLL_SPEED = Settings.getUInt("SSPEED", 100);
 #ifdef ULANZI
     SHOW_BAT = Settings.getBool("BAT", false);
+    SHOW_PV_SOC = Settings.getBool("PV_SOC", true);
+    SHOW_PV_ENERGY = Settings.getBool("PV_ENERGY", true);
+    SHOW_PV_POWER = Settings.getBool("PV_POWER", true);
 #endif
     SOUND_ACTIVE = Settings.getBool("SOUND", true);
     SOUND_VOLUME = Settings.getUInt("VOL", 25);
@@ -326,6 +330,9 @@ void saveSettings()
     Settings.putUInt("SSPEED", SCROLL_SPEED);
 #ifdef ULANZI
     Settings.putBool("BAT", SHOW_BAT);
+    Settings.putBool("PV_SOC", SHOW_PV_SOC);
+    Settings.putBool("PV_ENERGY", SHOW_PV_ENERGY);
+    Settings.putBool("PV_POWER", SHOW_PV_POWER);
 #endif
     Settings.putBool("SOUND", SOUND_ACTIVE);
     Settings.putUInt("VOL", SOUND_VOLUME);
@@ -347,12 +354,15 @@ String MQTT_PASS;
 String MQTT_PREFIX;
 String EXTERNAL_API_URL = "";
 uint32_t EXTERNAL_API_INTERVAL_MIN = 0;
-String PV_ACCESS_TOKEN = "30cc1c89-78fd-4173-9e3a-9b97d33f12eb";
-String PV_REFRESH_TOKEN = "";
+String PV_ACCESS_TOKEN = "0c205ae1-bb11-4ff3-b324-e4abe67679e3";
+String PV_REFRESH_TOKEN = "86cf653c-7866-4045-9e99-84f65b37aee3";
 String PV_ACCESS_KEY = "8bjzugmhfrcsq779hh2wpzug2map92f7";
 String PV_DEVICE_APPKEY = "BDFC26B55A8F6ADCB38F5F356123F42F";
-String PV_PLATFORM_APPKEY = "9a8c02de-26e0-4ed2-b894-c95537d36a43";
 String PV_DEVICE_SN = "A2321670598";
+bool PV_DEMO_MODE = false;
+float PV_DEMO_POWER_W = 0;
+float PV_DEMO_SOC = 0;
+float PV_DEMO_ENERGY_KWH = 0;
 bool IO_BROKER = false;
 bool NET_STATIC = false;
 bool SHOW_TIME = true;
@@ -360,6 +370,9 @@ bool SHOW_TIME = true;
 bool SHOW_DATE = true;
 bool SHOW_WEATHER = true;
 bool SHOW_BAT = false;
+bool SHOW_PV_SOC = true;
+bool SHOW_PV_ENERGY = true;
+bool SHOW_PV_POWER = true;
 bool SHOW_TEMP = false;
 bool SHOW_HUM = false;
 bool SHOW_SECONDS = true;
@@ -399,6 +412,8 @@ uint8_t BATTERY_PERCENT = 0;
 uint16_t BATTERY_RAW = 0;
 #endif
 uint16_t PV_Power_total = 0;
+float PV_Battery_SOC = 0;
+float PV_Energy_Daily = 0;
 float HUM_OFFSET;
 uint16_t LDR_RAW;
 String TIME_FORMAT = "%H:%M:%S";

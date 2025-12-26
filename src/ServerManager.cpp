@@ -229,16 +229,16 @@ void ServerManager_::setup()
         mws.addOption("Password", MQTT_PASS);
         mws.addOption("Prefix", MQTT_PREFIX);
         mws.addOption("Homeassistant Discovery", HA_DISCOVERY);
-        mws.addOptionBox("External API");
-        mws.addOption("External API Url", EXTERNAL_API_URL);
-        mws.addOption("External API Interval (min)", EXTERNAL_API_INTERVAL_MIN);
         mws.addOptionBox("PV API");
         mws.addOption("PV Access Token", PV_ACCESS_TOKEN);
         mws.addOption("PV Refresh Token", PV_REFRESH_TOKEN);
         mws.addOption("PV Access Key", PV_ACCESS_KEY);
         mws.addOption("PV Device AppKey", PV_DEVICE_APPKEY);
-        mws.addOption("PV Platform AppKey", PV_PLATFORM_APPKEY);
         mws.addOption("PV Device SN", PV_DEVICE_SN);
+        mws.addOption("PV Demo Mode", PV_DEMO_MODE);
+        mws.addOption("PV Demo Power (W)", PV_DEMO_POWER_W);
+        mws.addOption("PV Demo SOC (%)", PV_DEMO_SOC);
+        mws.addOption("PV Demo Energy (kWh)", PV_DEMO_ENERGY_KWH);
         mws.addOptionBox("Time");
         mws.addOption("NTP Server", NTP_SERVER);
         mws.addOption("Timezone", NTP_TZ);
@@ -281,7 +281,6 @@ void ServerManager_::setup()
 void ServerManager_::tick()
 {
     mws.run();
-    handleExternalApi();
 
     if (!AP_MODE)
     {
@@ -313,48 +312,6 @@ void ServerManager_::tick()
     }
 }
 
-void ServerManager_::handleExternalApi()
-{
-    if (AP_MODE || !isConnected)
-        return;
-
-    if (EXTERNAL_API_URL.isEmpty() || EXTERNAL_API_INTERVAL_MIN == 0)
-        return;
-
-    uint32_t intervalMs = EXTERNAL_API_INTERVAL_MIN * 60000UL;
-    uint32_t now = millis();
-    if (lastExternalApiCall != 0 && (uint32_t)(now - lastExternalApiCall) < intervalMs)
-        return;
-
-    lastExternalApiCall = now;
-
-    if (WiFi.status() != WL_CONNECTED)
-        return;
-
-    HTTPClient http;
-    if (!http.begin(EXTERNAL_API_URL))
-    {
-        if (DEBUG_MODE)
-            DEBUG_PRINTF("External API begin failed: %s", EXTERNAL_API_URL.c_str());
-        return;
-    }
-
-    int httpCode = http.GET();
-
-    if (DEBUG_MODE)
-    {
-        if (httpCode > 0)
-        {
-            DEBUG_PRINTF("External API response: %d", httpCode);
-        }
-        else
-        {
-            DEBUG_PRINTF("External API request failed: %s", http.errorToString(httpCode).c_str());
-        }
-    }
-    http.end();
-}
-
 void ServerManager_::loadSettings()
 {
     if (LittleFS.exists("/DoNotTouch.json"))
@@ -373,10 +330,6 @@ void ServerManager_::loadSettings()
         MQTT_PASS = doc["Password"].as<String>();
         MQTT_PREFIX = doc["Prefix"].as<String>();
         NET_STATIC = doc["Static IP"];
-        if (doc["External API Url"].is<String>())
-            EXTERNAL_API_URL = doc["External API Url"].as<String>();
-        if (doc["External API Interval (min)"])
-            EXTERNAL_API_INTERVAL_MIN = doc["External API Interval (min)"].as<uint32_t>();
         if (doc["PV Access Token"].is<String>())
             PV_ACCESS_TOKEN = doc["PV Access Token"].as<String>();
         if (doc["PV Refresh Token"].is<String>())
@@ -385,10 +338,20 @@ void ServerManager_::loadSettings()
             PV_ACCESS_KEY = doc["PV Access Key"].as<String>();
         if (doc["PV Device AppKey"].is<String>())
             PV_DEVICE_APPKEY = doc["PV Device AppKey"].as<String>();
-        if (doc["PV Platform AppKey"].is<String>())
-            PV_PLATFORM_APPKEY = doc["PV Platform AppKey"].as<String>();
         if (doc["PV Device SN"].is<String>())
             PV_DEVICE_SN = doc["PV Device SN"].as<String>();
+        PV_DEMO_MODE = doc["PV Demo Mode"] | false;
+        PV_DEMO_POWER_W = doc["PV Demo Power (W)"] | 0.0;
+        PV_DEMO_SOC = doc["PV Demo SOC (%)"] | 0.0;
+        PV_DEMO_ENERGY_KWH = doc["PV Demo Energy (kWh)"] | 0.0;
+        if (PV_DEMO_MODE)
+        {
+            PV_Power_total = (uint16_t)PV_DEMO_POWER_W;
+            PV_Battery_SOC = PV_DEMO_SOC;
+            PV_Energy_Daily = PV_DEMO_ENERGY_KWH;
+            if (DEBUG_MODE)
+                DEBUG_PRINTF("PV Demo apply on save: power %u W, SOC %.2f, energy %.3f kWh", PV_Power_total, PV_Battery_SOC, PV_Energy_Daily);
+        }
         HA_DISCOVERY = doc["Homeassistant Discovery"];
         NET_IP = doc["Local IP"].as<String>();
         NET_GW = doc["Gateway"].as<String>();

@@ -7,8 +7,6 @@ class ServerManager_
 {
 private:
     ServerManager_() = default;
-    void handleExternalApi();
-    uint32_t lastExternalApiCall = 0;
 
 public:
     static ServerManager_ &getInstance();

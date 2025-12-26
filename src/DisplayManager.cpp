@@ -1073,6 +1073,9 @@ void DisplayManager_::loadNativeApps()
   }
 #ifdef ULANZI
   updateApp("Battery", BatApp, SHOW_BAT, 4);
+  updateApp("PV_Power", PvPowerApp, SHOW_PV_POWER, 5);
+  updateApp("PV_SOC", PvSocApp, SHOW_PV_SOC, 6);
+  updateApp("PV_Energy", PvEnergyApp, SHOW_PV_ENERGY, 7);
 #endif
 
   ui->setApps(Apps);
