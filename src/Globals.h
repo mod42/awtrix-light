@@ -87,12 +87,6 @@ extern uint16_t LDR_RAW;
 extern String CURRENT_APP;
 extern int BACKGROUND_EFFECT;
 extern uint8_t BATTERY_PERCENT;
-extern uint16_t PV_Power_total;
-extern float PV_Battery_SOC;
-extern float PV_Energy_Daily;
-extern bool SHOW_PV_SOC;
-extern bool SHOW_PV_ENERGY;
-extern bool SHOW_PV_POWER;
 extern uint16_t BATTERY_RAW;
 extern float TEMP_OFFSET;
 extern float HUM_OFFSET;
@@ -110,6 +104,21 @@ extern String TIME_FORMAT;
 extern String DATE_FORMAT;
 extern bool START_ON_MONDAY;
 extern bool IS_CELSIUS;
+
+struct PvInverterData
+{
+    uint16_t power;
+    float soc;
+    float energyKwh;
+};
+
+extern PvInverterData PV_Sungrow;
+extern PvInverterData PV_Fronius;
+extern String PV_INVERTER;
+extern bool SHOW_PV_SOC;
+extern bool SHOW_PV_ENERGY;
+extern bool SHOW_PV_POWER;
+PvInverterData &getActivePvData();
   
 #define TEMP_SENSOR_TYPE_NONE 0
 #define TEMP_SENSOR_TYPE_BME280 1

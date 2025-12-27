@@ -667,12 +667,13 @@ static void fetchPvPowerFromApi()
                 DEBUG_PRINTLN(F("PV API: no point list in response"));
             }
 
-            PV_Power_total = total;
-            PV_Battery_SOC = soc;
+            // Update Sungrow inverter data
+            PV_Sungrow.power = total;
+            PV_Sungrow.soc = soc;
             // API energy is reported in Wh; convert to kWh for display
-            PV_Energy_Daily = energyWh / 1000.0f;
+            PV_Sungrow.energyKwh = energyWh / 1000.0f;
             if (DEBUG_MODE)
-                DEBUG_PRINTF("PV API: total %u W, SOC %.2f, Energy %.3f kWh", PV_Power_total, PV_Battery_SOC, PV_Energy_Daily);
+                DEBUG_PRINTF("PV API: total %u W, SOC %.2f, Energy %.3f kWh", PV_Sungrow.power, PV_Sungrow.soc, PV_Sungrow.energyKwh);
         }
     }
     else if (DEBUG_MODE)
@@ -830,9 +831,16 @@ static void reloadPvDemoSettings()
     prevSoc = PV_DEMO_SOC;
     prevEnergy = PV_DEMO_ENERGY_KWH;
 
-    if (changed && DEBUG_MODE && PV_DEMO_MODE)
+    if (changed && DEBUG_MODE)
     {
-        DEBUG_PRINTF("PV Demo reload: power %.2f W, SOC %.2f, energy %.3f kWh", PV_DEMO_POWER_W, PV_DEMO_SOC, PV_DEMO_ENERGY_KWH);
+        if (PV_DEMO_MODE)
+        {
+            DEBUG_PRINTF("PV Demo reload: power %.2f W, SOC %.2f, energy %.3f kWh", PV_DEMO_POWER_W, PV_DEMO_SOC, PV_DEMO_ENERGY_KWH);
+        }
+        else
+        {
+            DEBUG_PRINTLN(F("PV Demo reload: disabled"));
+        }
     }
 
     // apply immediately if demo mode is active
@@ -849,11 +857,12 @@ static void reloadPvDemoSettings()
 
 static void applyPvDemoValues()
 {
-    PV_Power_total = (uint16_t)PV_DEMO_POWER_W;
-    PV_Battery_SOC = PV_DEMO_SOC;
-    PV_Energy_Daily = PV_DEMO_ENERGY_KWH;
+    PvInverterData &active = getActivePvData();
+    active.power = (uint16_t)PV_DEMO_POWER_W;
+    active.soc = PV_DEMO_SOC;
+    active.energyKwh = PV_DEMO_ENERGY_KWH;
     if (DEBUG_MODE)
-        DEBUG_PRINTF("PV API: demo mode values power %u W, SOC %.2f, energy %.3f kWh", PV_Power_total, PV_Battery_SOC, PV_Energy_Daily);
+        DEBUG_PRINTF("PV API: demo mode values power %u W, SOC %.2f, energy %.3f kWh", active.power, active.soc, active.energyKwh);
 }
 
 unsigned long long PeripheryManager_::readUptime()

@@ -353,8 +353,9 @@ void PvPowerApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t 
         matrix->drawRGBBitmap(x, y, icon_27283, 8, 8);
     }
 
+    PvInverterData &activePv = getActivePvData();
     // Right-align the power text within the 24px space to the right of the icon
-    String powerText = String(PV_Power_total) + "W";
+    String powerText = String(activePv.power) + "W";
     uint16_t powerWidth = getTextWidth(powerText.c_str(), 0);
     const uint16_t iconWidth = 8;
     const uint16_t availableWidth = 24;
@@ -375,7 +376,8 @@ void PvSocApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t x,
     DisplayManager.getInstance().resetTextColor();
     matrix->drawRGBBitmap(x, y, icon_1486, 8, 8);
     // Right-align SOC within 24px after the icon
-    String socText = String((int)PV_Battery_SOC) + "%";
+    PvInverterData &activePv = getActivePvData();
+    String socText = String((int)activePv.soc) + "%";
     uint16_t socWidth = getTextWidth(socText.c_str(), 0);
     const uint16_t iconWidth = 8;
     const uint16_t availableWidth = 24;
@@ -409,8 +411,9 @@ void PvEnergyApp(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, int16_t
     }
     static int16_t energyScrollPos = 0;
     static uint8_t energyScrollTick = 0;
-    // PV_Energy_Daily is in kWh; render with one decimal
-    String energyText = String(PV_Energy_Daily, 1) + " kWh";
+    // Active inverter energy is in kWh; render with one decimal
+    PvInverterData &activePv = getActivePvData();
+    String energyText = String(activePv.energyKwh, 1) + " kWh";
     uint16_t textWidth = getTextWidth(energyText.c_str(), 0);
     const uint16_t iconWidth = 8;
     const uint16_t totalWidth = 32;

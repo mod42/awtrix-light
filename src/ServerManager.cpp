@@ -54,7 +54,11 @@ void ServerManager_::erase()
 void saveHandler()
 {
     WebServerClass *webRequest = mws.getRequest();
+    if (DEBUG_MODE)
+        DEBUG_PRINTLN(F("Save handler: /save hit, reloading settings"));
     ServerManager.getInstance().loadSettings();
+    if (DEBUG_MODE)
+        DEBUG_PRINTLN(F("Save handler: settings reloaded from DoNotTouch.json"));
     webRequest->send(200);
 }
 
@@ -235,6 +239,17 @@ void ServerManager_::setup()
         mws.addOption("PV Access Key", PV_ACCESS_KEY);
         mws.addOption("PV Device AppKey", PV_DEVICE_APPKEY);
         mws.addOption("PV Device SN", PV_DEVICE_SN);
+        String pvSelect = "<label for='pv_inverter'>PV Inverter</label><select name='PV Inverter' id='pv_inverter'>";
+        pvSelect += "<option value='sungrow'";
+        if (PV_INVERTER == "sungrow")
+            pvSelect += " selected";
+        pvSelect += ">Sungrow</option>";
+        pvSelect += "<option value='fronius'";
+        if (PV_INVERTER == "fronius")
+            pvSelect += " selected";
+        pvSelect += ">Fronius</option>";
+        pvSelect += "</select>";
+        mws.addHTML(pvSelect.c_str(), "pv_inverter_select");
         mws.addOption("PV Demo Mode", PV_DEMO_MODE);
         mws.addOption("PV Demo Power (W)", PV_DEMO_POWER_W);
         mws.addOption("PV Demo SOC (%)", PV_DEMO_SOC);
@@ -250,7 +265,7 @@ void ServerManager_::setup()
         mws.addOptionBox("Auth");
         mws.addOption("Auth Username", AUTH_USER);
         mws.addOption("Auth Password", AUTH_PASS);
-        mws.addHandler("/save", HTTP_POST, saveHandler);
+        mws.addHandler("/save", HTTP_ANY, saveHandler);
         addHandler();
         udp.begin(localUdpPort);
         if (DEBUG_MODE)
@@ -340,17 +355,20 @@ void ServerManager_::loadSettings()
             PV_DEVICE_APPKEY = doc["PV Device AppKey"].as<String>();
         if (doc["PV Device SN"].is<String>())
             PV_DEVICE_SN = doc["PV Device SN"].as<String>();
+        if (doc["PV Inverter"].is<String>())
+            PV_INVERTER = doc["PV Inverter"].as<String>();
         PV_DEMO_MODE = doc["PV Demo Mode"] | false;
         PV_DEMO_POWER_W = doc["PV Demo Power (W)"] | 0.0;
         PV_DEMO_SOC = doc["PV Demo SOC (%)"] | 0.0;
         PV_DEMO_ENERGY_KWH = doc["PV Demo Energy (kWh)"] | 0.0;
         if (PV_DEMO_MODE)
         {
-            PV_Power_total = (uint16_t)PV_DEMO_POWER_W;
-            PV_Battery_SOC = PV_DEMO_SOC;
-            PV_Energy_Daily = PV_DEMO_ENERGY_KWH;
+            PvInverterData &active = getActivePvData();
+            active.power = (uint16_t)PV_DEMO_POWER_W;
+            active.soc = PV_DEMO_SOC;
+            active.energyKwh = PV_DEMO_ENERGY_KWH;
             if (DEBUG_MODE)
-                DEBUG_PRINTF("PV Demo apply on save: power %u W, SOC %.2f, energy %.3f kWh", PV_Power_total, PV_Battery_SOC, PV_Energy_Daily);
+                DEBUG_PRINTF("PV Demo apply on save: power %u W, SOC %.2f, energy %.3f kWh", active.power, active.soc, active.energyKwh);
         }
         HA_DISCOVERY = doc["Homeassistant Discovery"];
         NET_IP = doc["Local IP"].as<String>();

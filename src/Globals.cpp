@@ -354,8 +354,8 @@ String MQTT_PASS;
 String MQTT_PREFIX;
 String EXTERNAL_API_URL = "";
 uint32_t EXTERNAL_API_INTERVAL_MIN = 0;
-String PV_ACCESS_TOKEN = "0c205ae1-bb11-4ff3-b324-e4abe67679e3";
-String PV_REFRESH_TOKEN = "86cf653c-7866-4045-9e99-84f65b37aee3";
+String PV_ACCESS_TOKEN = "";
+String PV_REFRESH_TOKEN = "";
 String PV_ACCESS_KEY = "8bjzugmhfrcsq779hh2wpzug2map92f7";
 String PV_DEVICE_APPKEY = "BDFC26B55A8F6ADCB38F5F356123F42F";
 String PV_DEVICE_SN = "A2321670598";
@@ -411,9 +411,9 @@ float TEMP_OFFSET = -9;
 uint8_t BATTERY_PERCENT = 0;
 uint16_t BATTERY_RAW = 0;
 #endif
-uint16_t PV_Power_total = 0;
-float PV_Battery_SOC = 0;
-float PV_Energy_Daily = 0;
+PvInverterData PV_Sungrow = {0, 0.0f, 0.0f};
+PvInverterData PV_Fronius = {0, 0.0f, 0.0f};
+String PV_INVERTER = "sungrow";
 float HUM_OFFSET;
 uint16_t LDR_RAW;
 String TIME_FORMAT = "%H:%M:%S";
@@ -477,3 +477,10 @@ int WEB_PORT = 80;
 OverlayEffect GLOBAL_OVERLAY = NONE;
 String HOSTNAME = "";
 bool BUZ_VOL = false;
+
+PvInverterData &getActivePvData()
+{
+    if (PV_INVERTER.equalsIgnoreCase("fronius"))
+        return PV_Fronius;
+    return PV_Sungrow;
+}
